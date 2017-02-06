@@ -8,12 +8,14 @@
 #include <string>
 #include <algorithm>
 #include <windows.h>
-#include "UMIO.h"
-#include "UMObject.h"
 
 using namespace v8;
 
 using node::AtExit;
+
+namespace {
+	std::string buffer;
+}
 
 static void dispose(void*)
 {
@@ -48,9 +50,9 @@ static void load(const FunctionCallbackInfo<Value>& args)
 	}
 	int memorysize = 0;
 	memcpy(&memorysize, mapview, 4);
+	buffer = "";
 
 	if (memorysize > 0) {
-		std::string buffer;
 		buffer.resize(memorysize);
 		const int count = (memorysize) / 1024;
 		const int last = (memorysize)-count * 1024;
@@ -58,20 +60,9 @@ static void load(const FunctionCallbackInfo<Value>& args)
 			memcpy(&buffer[1024 * i], &mapview[1024 * i + 4], 1024);
 		}
 		memcpy(&buffer[1024 * count], &mapview[1024 * count + 4], last);
-		const int hoge = 1024 * count + last;
 
-		umio::UMIO io;
-		umio::UMIOSetting setting;
-		umio::UMObjectPtr obj = io.load_from_memory(buffer, setting);
-		if (obj) {
-			const umio::UMSkeleton::IDToSkeletonMap& skeletonMap = obj->skeleton_map();
-			std::string skeletons;
-			for (auto it = skeletonMap.begin(); it != skeletonMap.end(); ++it) {
-				printf("hogehoge %s\n", it->second.name().c_str());
-				skeletons += it->second.name();
-			}
-			args.GetReturnValue().Set(v8::String::NewFromUtf8(isolate, skeletons.c_str()));
-		}
+		Local<ArrayBuffer> array_buffer = v8::ArrayBuffer::New(isolate, const_cast<char*>(buffer.c_str()), memorysize);
+		args.GetReturnValue().Set(array_buffer);
 	}
 
 	UnmapViewOfFile(mapview);

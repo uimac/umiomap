@@ -4,10 +4,7 @@
 		"target_name": "umiomap",
 		"conditions": [
 				[	"OS == 'win'", {
-					"libraries": [
-					"<(module_root_dir)/lib/umio/x64/Release/umio.lib",
-					"<(module_root_dir)/lib/msgpack/x64/Release/msgpack.lib",
-					],
+					"libraries": [],
 					"configurations": {
 						'Debug': {
 							'msvs_settings': {
@@ -41,8 +38,6 @@
 		"src/umiomap.cpp"
 		],
 		"include_dirs": [
-		"<(module_root_dir)/lib/umio/include",
-		"<(module_root_dir)/lib/msgpack/include",
 		"<(module_root_dir)/src/",
 		]
 	}]
