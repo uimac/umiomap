@@ -6,6 +6,7 @@
 
 #include <vector>
 #include <string>
+#include <map>
 #include <algorithm>
 #include <windows.h>
 
@@ -15,10 +16,24 @@ using node::AtExit;
 
 namespace {
 	std::string buffer;
+
+	typedef std::map<std::string, HANDLE> HandleMap;
+	HandleMap handle_map;
+
+	typedef std::map<std::string, LPSTR> ViewMap;
+	ViewMap view_map;
 }
 
 static void dispose(void*)
 {
+	for (ViewMap::iterator it = view_map.begin(); it != view_map.end(); ++it)
+	{
+		UnmapViewOfFile(it->second);
+	}
+	for (HandleMap::iterator it = handle_map.begin(); it != handle_map.end(); ++it)
+	{
+		CloseHandle(it->second);
+	}
 }
 
 static void load(const FunctionCallbackInfo<Value>& args)
@@ -69,9 +84,48 @@ static void load(const FunctionCallbackInfo<Value>& args)
 	CloseHandle(hmap);
 }
 
+static void save(const FunctionCallbackInfo<Value>& args)
+{
+	Isolate* isolate = Isolate::GetCurrent();
+	if (args.Length() < 2) {
+		isolate->ThrowException(Exception::TypeError(
+			String::NewFromUtf8(isolate, "Wrong number of arguments")));
+		return;
+	}
+	if (!args[0]->IsString()) {
+		isolate->ThrowException(Exception::TypeError(
+			String::NewFromUtf8(isolate, "Wrong arguments")));
+		return;
+	}
+	if (!args[1]->IsArrayBuffer()) {
+		isolate->ThrowException(Exception::TypeError(
+			String::NewFromUtf8(isolate, "Wrong arguments")));
+		return;
+	}
+
+	Local<ArrayBuffer> buffer = Local<ArrayBuffer>::Cast(args[1]);
+	ArrayBuffer::Contents contents = buffer->GetContents();
+
+	v8::String::Utf8Value keyStr(args[0]->ToString());
+	const std::string key = *keyStr;
+	const int memorysize = contents.ByteLength();
+
+	if (handle_map.find(key) == handle_map.end()) {
+		handle_map[key] = CreateFileMappingA((HANDLE)-1, NULL, PAGE_READWRITE, 0,memorysize + 4, key.c_str());
+	}
+	if (view_map.find(key) == view_map.end()) {
+		view_map[key] =  (LPSTR)MapViewOfFile(handle_map[key], FILE_MAP_ALL_ACCESS, 0, 0, 0);
+	}
+	memcpy(view_map[key], &memorysize, 4);
+	memcpy(view_map[key] + 4, contents.Data(), contents.ByteLength());
+
+	args.GetReturnValue().Set(true);
+}
+
 void Init(Handle<Object> exports) {
 	AtExit(dispose);
 	NODE_SET_METHOD(exports, "load", load);
+	NODE_SET_METHOD(exports, "save", save);
 
 }
 NODE_MODULE(umnode, Init)
